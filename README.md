@@ -3,7 +3,9 @@
 
 ## Warning!
 
-The Deployment Module, built using the principles outlined in http://blog.dcycle.com/blog/44/what-site-deployment-module/ and the [**Dcycle Manifesto**](http://blog.dcycle.com/manifesto/ "Dcycle Manifesto").
+The Deployment Module, built using the principles outlined in http://blog.dcycle.com/blog/44/what-site-deployment-module/ and the [**Dcycle Manifesto**](http://blog.dcycle.com/manifesto/ "Dcycle Manifesto"), is not necessarly the *best* solution to management and Deployment of Code/Configuration.
+
+If choosing to use the Deployment Module, a great deal of research and review should be done beforehand to understand the background requirements (namespacing, order-of-operations, etc.) outlined for Drupal 7 Deployment modules.
 
 The main precept of the Dcycle Manifesto is part of the root behind the Configuration Management push in Drupal 8:
 
