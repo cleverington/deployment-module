@@ -1,0 +1,143 @@
+<?php
+
+/**
+ * @file
+ * Module file for code deployment.
+ */
+
+/**
+ * Helper function to create a Taxonomy Vocabulary.
+ */
+function test_d7_deploy_create_vocabulary($vocabulary) {
+  $new_vocab = (object) $vocabulary;
+  taxonomy_vocabulary_save($new_vocab);
+}
+
+/**
+ * Recursive function to build Taxonomy for Directory Structure from an array.
+ *
+ * @param array $taxonomy_tree
+ *   An array representing a the entire taxonomy-based Directory Structure.
+ * @param string $vid
+ *   A string representing the machine name of the taxonomy_tree.
+ * @param int $parent_id
+ *   An integer representing the parent taxonomy term.
+ */
+function test_d7_deploy_taxonomy_builder(array $taxonomy_tree, $vid, $parent_id = NULL) {
+  $weight = 0;
+  foreach ($taxonomy_tree as $taxonomy_term) {
+    $term = new stdClass();
+    $term->name = $taxonomy_term['name'];
+    $term->vid = $vid;
+    $term->weight = $weight;
+    if (isset($taxonomy_term['description'])) {
+      $term->description = $taxonomy_term['description'];
+    }
+    if (isset($parent_id)) {
+      $term->parent = $parent_id;
+    }
+
+    taxonomy_term_save($term);
+
+    // If there are children, recurse into those menus as well.
+    if (isset($taxonomy_term['#children']) and !empty($taxonomy_term['#children'])) {
+      test_d7_deploy_taxonomy_builder($taxonomy_term['#children'], $vid, $term->tid);
+    }
+
+    // Increment the weight.
+    $weight++;
+  }
+}
+
+/**
+ * Helper function to programmatically create Deployment Users.
+ */
+function test_d7_deploy_create_user($new_user) {
+  $roles = $new_user['roles'];
+  $user = user_load_by_name($new_user['name']);
+  if ($user) {
+    drupal_set_message("User " . $new_user['name'] . " already exists.");
+  }
+  else {
+    $new_user = array(
+      'name' => $new_user['name'],
+    // note: do not md5 the password.
+      'pass' => $sifra,
+      'mail' => $new_user['mail'],
+      'status' => 1,
+      'init' => $new_user['mail'],
+    );
+    // The first parameter is sent blank so a new user is created.
+    user_save('', $new_user);
+    drupal_set_message(
+      t('Created user @new_user - email: @new_user_email',
+        array(
+          '@new_user' => $new_user['name'],
+          '@new_user_email' => $new_user['email'],
+        ),
+      'status', FALSE)
+    );
+
+    $user = user_load_by_name($new_user['name']);
+
+    foreach ($roles as $key => $role_to_add) {
+      drupal_set_message(
+        t('Adding role @role_to_add to User @new_user',
+          array(
+            '@role_to_add' => $role_to_add,
+            '@new_user' => $new_user['name'],
+          ),
+        'status', FALSE)
+      );
+      if ($role = user_role_load_by_name($role_to_add)) {
+        user_multiple_role_edit(array($user->uid), 'add_role', $role->rid);
+      }
+    }
+  }
+}
+
+/**
+ * Custom callback to set Workbench access data.
+ *
+ * If we pass an array with ['values'] that mimic the
+ * workbench form submit values, we can effectively deploy
+ * these settings.
+ *
+ * @/sites/all/modules/contrib/workbench_access/workbench_access.admin.inc
+ * function workbench_access_settings_submit
+ * If we DPM in there, we can print out the $form_state['values'] somehow
+ * to get the data we need to pass to this function. This function is just a
+ * copy/paste of that function, expecting only a "form_state" array.
+ */
+function test_d7_deploy_workbench_set_data($form_state) {
+  // Reset the tree.
+  workbench_access_reset_tree();
+  // If auto-assign, then do so.
+  if (empty($form_state['values']['workbench_access_auto_assign'])) {
+    return;
+  }
+  // Get the new tree rules and check for changes.
+  $active = workbench_access_get_active_tree();
+  foreach ($active['tree'] as $key => $item) {
+    $data = array_merge($active['access_scheme'], $item);
+    if (!isset($active['active'][$key]) && !empty($form_state['values']['workbench_access_' . $active['access_scheme']['access_scheme']][$item['access_type_id']])) {
+      workbench_access_section_save($data);
+    }
+    elseif (empty($form_state['values']['workbench_access_' . $active['access_scheme']['access_scheme']][$item['access_type_id']])) {
+      workbench_access_section_delete($data);
+    }
+  }
+  // Make sure we cleaned out all the old sections.
+  $sections = db_query("SELECT * FROM {workbench_access} WHERE access_type = :access_type",
+    array(':access_type' => $active['access_scheme']['access_type'])
+  )->fetchAll();
+  foreach ($sections as $section) {
+    if (empty($form_state['values']['workbench_access_' . $active['access_scheme']['access_scheme']][$section->access_type_id])) {
+      workbench_access_section_delete((array) $section);
+    }
+  }
+  // If field settings are present, save them.
+  if (isset($form_state['values']['field_elements'])) {
+    workbench_access_save_field_elements($form_state['values']['field_elements']);
+  }
+}

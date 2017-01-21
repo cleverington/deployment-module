@@ -1,0 +1,4 @@
+name = Drupal 7 Test Deployment Module
+description = Deploys code in a regulated and stable manner using hook_update()
+core = 7.x
+version = 7.x-1.0-dev

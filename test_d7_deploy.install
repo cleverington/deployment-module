@@ -1,0 +1,337 @@
+<?php
+
+/**
+ * @file
+ * Install file for deploying Test Drupal 7 site.
+ *
+ * The Drupal 7 Testing Deployment module was built using the principles
+ * and ideas outlined within on the DCycle Blog at
+ * http://blog.dcycle.com/blog/44/what-site-deployment-module/.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function test_d7_deploy_install() {
+  // Set initial value for schema version to run updates after install.
+  drupal_set_installed_schema_version('test_d7_deploy', 7100);
+
+  // Enable Admin and End-User themes.
+  $enable = array(
+    'theme_default' => 'emulsify',
+    'admin_theme' => 'seven',
+  );
+
+  theme_enable($enable);
+
+  // Set Admin and End-User themes as default.
+  variable_set('theme_default', $enable['theme_default']);
+  variable_set('admin_theme', $enable['admin_theme']);
+  variable_set('node_admin_theme', '1');
+
+  // Disable the default Bartik theme.
+  theme_disable(array('bartik'));
+
+  // Uninstall and Disable existing Core modules.
+  $modules_to_disable = array(
+    'blog',
+    'toolbar',
+  );
+
+  foreach ($modules_to_disable as $key => $module) {
+    if (!module_exists($module)) {
+      unset($modules_to_disable[$key]);
+    }
+    module_disable($modules_to_disable);
+  }
+
+  cache_clear_all();
+
+  // List of contrib modules to enable.
+  $contrib_modules = array(
+    'admin_menu_toolbar',
+    'caption_filter',
+    'ctools_custom_content',
+    'entity_token',
+    'entity_view_mode',
+    'fitvids',
+    'imce_mkdir',
+    'media_vimeo',
+    'media_wysiwyg_view_mode',
+    'metatag_context',
+    'metatag_dc',
+    'metatag_facebook',
+    'metatag_google_plus',
+    'metatag_panels',
+    'metatag_twitter_cards',
+    'metatag_views',
+    'migrate_d2d_ui',
+    'migrate_extras',
+    'pathologic',
+    'slick_fields',
+    'slick_views',
+    'stringoverrides',
+    'term_depth',
+    'themekey_compat',
+    'themekey_css',
+    'themekey_features',
+    'themekey_redirect',
+    'views_bulk_operations',
+    'views_content',
+    'views_ui',
+    'workbench',
+    'workbench_access',
+    'colorbox',
+    'fe_block',
+    'pantheon_api',
+  );
+  // Whether or not to enable dependant modules.
+  $enable_dependencies = TRUE;
+
+  // Enable the list of contrib modules.
+  if (isset($contrib_modules)) {
+    foreach ($contrib_modules as $key => $module_to_enable) {
+      // If (module_exists($module_to_enable)) {.
+      echo "Enabling ", $module_to_enable, " module.\n";
+      module_enable(array($module_to_enable), $enable_dependencies);
+      // };.
+    };
+  };
+
+  // Install taxonomy terms.
+  _install_taxonomy_terms();
+
+  // Flush cache.
+  cache_clear_all();
+
+  // Activates the AddToAny block and places in
+  // content region.
+  _activate_block('addtoany', 'addtoany_button', 'content', $enable['theme_default'], NULL, 0, '<none>');
+
+  // Adding Default Users.
+  require 'test_d7_content/test_d7_deploy_initial_users.inc';
+
+  // Revert all Features.
+  features_revert();
+
+  // Set homepage to the posting board.
+  variable_set('site_frontpage', 'postings');
+
+  // If initial installation, deploy all updates.
+  for ($i = 7001; $i < 8000; $i++) {
+    $candidate = 'test_d7_deploy_update_' . $i;
+    if (function_exists($candidate)) {
+      $candidate();
+    }
+  }
+
+}
+
+/**
+ * Custom callback to programmatically place a block (with UTDK Page Builder).
+ */
+function _activate_block($module, $block, $region, $theme, $visibility, $title, $pages = NULL) {
+  drupal_set_message("Activating block $module:$block\n");
+  db_merge('block')
+    ->key(array('theme' => $theme, 'delta' => $block, 'module' => $module))
+    ->fields(array(
+      'region' => ($region == BLOCK_REGION_NONE ? '' : $region),
+      'pages' => trim($pages),
+      'status' => (int) ($region != BLOCK_REGION_NONE),
+      'visibility' => $visibility,
+      'title' => $title,
+    ))
+    ->execute();
+}
+
+/**
+ * Helper function to add default taxonomy terms.
+ */
+function test_d7_deploy_install_taxonomy_terms() {
+
+  // Clear Vocabulary and create terms for Tags.
+  require 'test_d7_content/test_d7_deploy_taxonomy.tags.inc';
+
+  // Clear Vocabulary and create terms for Job Skills.
+  require 'test_d7_content/test_d7_deploy_taxonomy.skills.inc';
+
+  // Clear Vocabulary and create terms for Job Titles.
+  require 'test_d7_content/test_d7_deploy_taxonomy.job_titles.inc';
+
+}
+
+/**
+ * Implements hook_update() for 7101.
+ *
+ * Enable modules and revert features.
+ */
+function test_d7_deploy_update_7101() {
+
+  // Whether or not to enable dependant modules.
+  $enable_dependencies = TRUE;
+
+  // Update.
+  $update_modules = array(
+    'feed_faculty_bio_and_users',
+  );
+
+  // Enable the list of update modules.
+  if (isset($update_modules)) {
+    foreach ($update_modules as $key => $module_to_enable) {
+      // If (module_exists($module_to_enable)) {.
+      echo "Enabling ", $module_to_enable, " module.\n";
+      module_enable(array($module_to_enable), $enable_dependencies);
+      // };.
+    };
+  };
+
+  // Revert all Features.
+  features_revert();
+
+}
+
+/**
+ * Implements hook_update() for 7102.
+ *
+ * Removing unused modules.
+ */
+function test_d7_deploy_update_7102(&$sandbox) {
+
+  $modules = array(
+    'feed_faculty_bio_and_users',
+  );
+
+  db_delete('system')
+    ->condition('name', $modules, 'IN')
+    ->condition('type', 'module')
+    ->execute();
+}
+
+/**
+ * Implements hook_update() for 7103.
+ *
+ * Enable modules and revert features again.
+ */
+function test_d7_deploy_update_7103() {
+
+  // Whether or not to enable dependant modules.
+  $enable_dependencies = TRUE;
+
+  // Update.
+  $update_modules = array(
+    'easy_breadcrumbs',
+    'breadcrumb_settings',
+  );
+
+  // Enable the list of update modules.
+  if (isset($update_modules)) {
+    foreach ($update_modules as $key => $module_to_enable) {
+      // If (module_exists($module_to_enable)) {.
+      echo "Enabling ", $module_to_enable, " module.\n";
+      module_enable(array($module_to_enable), $enable_dependencies);
+      // };.
+    };
+  };
+
+  // Revert all Features.
+  features_revert();
+
+}
+
+/**
+ * Implements hook_update() for #7104.
+ *
+ * Revert updated Feature for Deployment.
+ */
+function test_d7_deploy_update_7104(&$sandbox) {
+
+  $modules_to_revert = array(
+    'feature_to_revert',
+  );
+  // Revert the three updated Features.
+  foreach ($modules_to_revert as $module) {
+    features_revert_module($module);
+  }
+
+}
+
+/**
+ * Implements hook_update() for #7106.
+ *
+ * Adding token embed support for Soundcloud fields.
+ */
+function test_d7_deploy_7105(&$sandbox) {
+  $field = array(
+    'type' => 'text',
+    'not null' => FALSE,
+    'description' => 'The Soundcloud token that is used to construct the embed URL.',
+  );
+  db_add_field('field_data_field_soundcloud_field', 'field_soundcloud_field_token', $field);
+  db_add_field('field_revision_field_soundcloud_field', 'field_soundcloud_field_token', $field);
+}
+
+/**
+ * Implements hook_update() for #7106.
+ *
+ * Delete {system} records for migration module from D6.
+ */
+function test_d7_deploy_update_7106(&$sandbox) {
+  $modules = array(
+    'view_ui',
+  );
+  db_delete('system')
+    ->condition('name', $modules, 'IN')
+    ->condition('type', 'module')
+    ->execute();
+}
+
+/**
+ * Implements hook_update() for 7107.
+ *
+ * Update 'Job Titles' Taxonomy.
+ */
+function test_d7_deploy_update_7107(&$sandbox) {
+  $update_test_job_titles = array(
+    array(
+      'name' => 'Self Employed',
+      '#children' => array(
+        'name' => 'Web Designer',
+      ),
+    ),
+    array(
+      'name' => 'University of Texas at Austin - Moody College of Communication',
+      '#children' => array(
+        array(
+          'name' => 'Senior Web Developer / Analyst',
+        ),
+      ),
+    ),
+    array(
+      'name' => 'MAXIMUS',
+      '#children' => array(
+        array(
+          'name' => 'Program Technician',
+        ),
+        array(
+          'name' => 'Program Technician Supervisor',
+        ),
+        array(
+          'name' => 'Administrator III - Quality Assurance',
+        ),
+      ),
+    ),
+    array(
+      'name' => 'Austin Community College - Continuing Education',
+      '#children' => array(
+        array(
+          'name' => 'Teacher - Web Authoring: Drupal',
+        ),
+      ),
+    ),
+  );
+
+  $vocabulary = taxonomy_vocabulary_machine_name_load('test_job_titles');
+
+  // Add all new terms.
+  test_d7_deploy_taxonomy_builder($update_test_job_titles, $vocabulary->vid);
+}
